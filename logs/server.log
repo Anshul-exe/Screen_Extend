@@ -1,0 +1,23 @@
+[2026-09-04T02:58:44.163] INFO: using legacy x windows screen
+[2026-09-04T02:58:44.188] IPC: started server, waiting for clients
+[2026-09-04T02:58:52.172] IPC: peer fingerprint: 61BE7BF8414DACC7C82CFAC757A0C3F5DB4EE36998B0FD5E097C0E51345F1689
+[2026-09-04T02:58:52.173] INFO: accepted secure socket
+[2026-09-04T02:58:52.173] INFO: network encryption protocol: TLSv1.3
+[2026-09-04T02:58:52.173] NOTE: accepted client connection
+[2026-09-04T02:58:52.173] INFO: saying hello as Barrier, protocol v1.8
+[2026-09-04T02:58:52.182] INFO: local languages: en
+[2026-09-04T02:58:52.190] IPC: client "ARCH" has connected
+[2026-09-04T02:59:06.086] IPC: client "ARCH" has disconnected
+[2026-09-04T02:59:20.032] IPC: peer fingerprint: 61BE7BF8414DACC7C82CFAC757A0C3F5DB4EE36998B0FD5E097C0E51345F1689
+[2026-09-04T02:59:20.033] INFO: accepted secure socket
+[2026-09-04T02:59:20.033] INFO: network encryption protocol: TLSv1.3
+[2026-09-04T02:59:20.033] NOTE: accepted client connection
+[2026-09-04T02:59:20.033] INFO: saying hello as Barrier, protocol v1.8
+[2026-09-04T02:59:20.043] INFO: local languages: en
+[2026-09-04T02:59:20.053] IPC: client "ARCH" has connected
+[2026-09-04T02:59:47.502] INFO: switch from "Lenuks" to "ARCH" at 0,540
+[2026-09-04T02:59:47.502] INFO: leaving screen
+[2026-09-04T02:59:47.576] INFO: screen "Lenuks" updated clipboard 0
+[2026-09-04T02:59:47.649] INFO: screen "Lenuks" updated clipboard 1
+[2026-09-04T02:59:57.339] INFO: switch from "ARCH" to "Lenuks" at 1916,310
+[2026-09-04T02:59:57.339] INFO: entering screen
