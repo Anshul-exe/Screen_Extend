@@ -1,0 +1,17 @@
+#!/bin/sh
+# ============================================================
+# screen-extend (Deskflow client)  -- added 2026-09-04
+# This machine acts as a secondary display for "Lenuks".
+# REVERT: rm ~/.xprofile
+# ============================================================
+
+# Never blank or lock: this panel is being used as a monitor.
+xset s off -dpms
+
+# Re-assert after i3 autostarts gnome-settings-daemon, which re-enables DPMS.
+( sleep 20; xset s off -dpms ) &
+
+# Deskflow client. Retries on its own if the server is not up yet.
+if command -v deskflow-core >/dev/null 2>&1; then
+    ( sleep 5; exec deskflow-core client ) >"$HOME/deskflow-client.log" 2>&1 &
+fi

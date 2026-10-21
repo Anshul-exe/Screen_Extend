@@ -1,0 +1,12 @@
+#!/bin/sh
+# ============================================================
+# screen-extend (Deskflow server)  -- added 2026-09-04
+# Shares this machine's keyboard/mouse with laptop "ARCH" (right side).
+# REVERT: rm ~/.xprofile
+# ============================================================
+
+# Backgrounded and guarded: if deskflow is missing or fails, the i3
+# session still starts normally. This must never block login.
+if command -v deskflow-core >/dev/null 2>&1; then
+    ( sleep 5; exec deskflow-core server ) >"$HOME/.cache/deskflow-server.log" 2>&1 &
+fi

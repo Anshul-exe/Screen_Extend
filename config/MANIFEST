@@ -1,0 +1,32 @@
+# Every file this setup owns, and where it has to land to be live.
+#
+# Read by ../install.sh (repo -> machines) and ../sync.sh (machines -> repo).
+# Whitespace separated, no spaces in any path. '#' starts a comment.
+#
+# flags:
+#   link      symlink the target at the repo file instead of copying, so the
+#             live command and the tracked copy can never drift apart
+#   exec      chmod +x after installing
+#   sudo      target is root-owned; needs sudo on that machine
+#   dotfiles  ALSO tracked in the dotfiles repo and stow-symlinked there.
+#             Do not blind-copy: edit it in dotfiles, or stow will fight you.
+#
+# NOT listed here, deliberately -- see README section 21:
+#   ~/.config/Deskflow/tls/deskflow.pem        private key
+#   ~/.config/Deskflow/tls/trusted-clients     per-install, generated
+#   ~/.config/Deskflow/tls/trusted-servers     per-install, generated
+#   ~/.ssh/authorized_keys                     identity
+#
+# machine  repo path                                               install path                                           flags
+main       config/main/xprofile                                    ~/.xprofile                                            -
+main       config/main/Deskflow/Deskflow.conf                      ~/.config/Deskflow/Deskflow.conf                       -
+main       config/main/Deskflow/deskflow-server.conf               ~/.config/Deskflow/deskflow-server.conf                -
+main       config/main/local-bin/screenextend                      ~/.local/bin/screenextend                              link
+main       config/main/local-bin/clipimg                           ~/.local/bin/clipimg                                   exec
+main       config/main/scripts/ssCustomName.sh                     ~/.scripts/ssCustomName.sh                             exec,dotfiles
+laptop     config/laptop/xprofile                                  ~/.xprofile                                            -
+laptop     config/laptop/Deskflow/Deskflow.conf                    ~/.config/Deskflow/Deskflow.conf                       -
+laptop     config/laptop/local-bin/clipimg                         ~/.local/bin/clipimg                                   exec
+laptop     config/laptop/local-bin/mount-main                      ~/.local/bin/mount-main                                exec
+laptop     config/laptop/flameshot/flameshot.ini                   ~/.config/flameshot/flameshot.ini                      -
+laptop     config/laptop/NetworkManager/99-wifi-powersave-off.conf /etc/NetworkManager/conf.d/99-wifi-powersave-off.conf  sudo

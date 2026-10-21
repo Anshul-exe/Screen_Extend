@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""clipimg - put an image on the X11 clipboard advertising PNG *and* BMP.
+
+Why this exists:
+  xclip can advertise only one target at a time. Deskflow's clipboard
+  understands only text/plain, text/html and image/bmp -- so a PNG-only
+  clipboard cannot cross machines and arrives as garbage.
+
+  GTK advertises every GdkPixbuf-writable type at once, so local apps keep
+  getting image/png exactly as before, while Deskflow picks image/bmp.
+
+This process must stay alive: X11 requires the selection owner to remain
+running to serve the data on request (this is what xclip does internally).
+
+REVERT: rm ~/.local/bin/clipimg
+"""
+import signal
+import sys
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gdk, GdkPixbuf, Gtk  # noqa: E402
+
+if len(sys.argv) != 2:
+    sys.exit("usage: clipimg <image-file>")
+
+try:
+    pixbuf = GdkPixbuf.Pixbuf.new_from_file(sys.argv[1])
+except Exception as exc:
+    sys.exit(f"clipimg: cannot load {sys.argv[1]}: {exc}")
+
+clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+clipboard.set_image(pixbuf)
+clipboard.store()  # no-op unless a clipboard manager is present
+
+for sig in (signal.SIGINT, signal.SIGTERM):
+    signal.signal(sig, lambda *_: Gtk.main_quit())
+
+Gtk.main()

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Mount main machine's home over SSH. REVERT: rm ~/.local/bin/mount-main
+M="$HOME/mnt/Lenuks"
+case "$1" in
+  -u|umount) fusermount3 -u "$M" 2>/dev/null || fusermount -u "$M"; echo "unmounted";;
+  *) mountpoint -q "$M" && { echo "already mounted at $M"; exit 0; }
+     sshfs mir@192.168.0.109:/home/mir "$M" \
+       -o reconnect,ServerAliveInterval=15,ServerAliveCountMax=3,idmap=user \
+     && echo "mounted: $M";;
+esac

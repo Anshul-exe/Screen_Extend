@@ -212,6 +212,10 @@ which yielded `client/remoteHost`, `core/screenName`, `security/tlsEnabled`,
 
 Screen names **must** match each machine's hostname.
 
+> **The authoritative copy is `config/main/Deskflow/deskflow-server.conf`.** The
+> listing below is the 2026-09-04 original and has since changed three times
+> (§19, §20). Read the file, not this block.
+
 > **Superseded on 2026-10-21 by Deskflow 1.27 — see §19.** The `section: screens`
 > block below is no longer parsed; computers are declared in `Deskflow.conf`
 > instead. Everything else in this section is still accurate.
@@ -237,7 +241,7 @@ section: options
 	heartbeat = 5000
 	keystroke(control+alt+h) = switchInDirection(left)
 	keystroke(control+alt+l) = switchInDirection(right)
-	keystroke(control+alt+shift+l) = lockCursorToScreen(toggle)
+	keystroke(control+alt+shift+p) = lockCursorToScreen(toggle)   # was +l, see §20
 end
 ```
 
@@ -251,7 +255,7 @@ Why each option:
 | `relativeMouseMoves = false`   | Absolute positioning; only needed for games/VMs.                                                                               |
 | `heartbeat = 5000`             | Liveness ping; disconnect after 3× no response.                                                                                |
 | `switchInDirection`            | Keyboard-only switching. Verified present in the binary: `syntax for action: switchInDirection(<left\|right\|up\|down>)`.      |
-| `lockCursorToScreen`           | Pins the cursor when heads-down.                                                                                               |
+| `lockCursorToScreen`           | Pins the cursor when heads-down. On `control+alt+shift+p` since 2026-10-22 (§20).                                                                                               |
 
 **`screenSaverSync` does not exist in 1.26.** It is listed in the official docs
 but was removed; including it makes the server refuse to start with
@@ -537,6 +541,10 @@ Result: 30-second hang → **0 seconds**, valid 1920×1080 PNG.
 screenextend start | stop | status | unstick | log
 ```
 
+> The full script is tracked at **`config/main/local-bin/screenextend`**, and
+> `~/.local/bin/screenextend` is a **symlink** to it — so the command you run and
+> the copy in this repo can never drift apart. See §21.
+
 The one interesting piece is that it **rediscovers the laptop's randomised
 `XAUTHORITY` on every invocation**, by reading it out of the running i3
 process's environment:
@@ -605,7 +613,7 @@ display would have given, without any streaming compromise.
 | -------------------------------- | ----------------------------------------------------------- |
 | Move to laptop                   | Mouse off the right edge, or `Ctrl+Alt+L`                   |
 | Move back to main                | Mouse off the left edge, or `Ctrl+Alt+H`                    |
-| Pin cursor to current screen     | `Ctrl+Alt+Shift+L` (toggle)                                 |
+| Pin cursor to current screen     | `Ctrl+Alt+Shift+P` (toggle) — was `+L`, see §20            |
 | Check link                       | `screenextend status`                                       |
 | Keys acting stuck (phantom Ctrl) | `screenextend unstick`                                      |
 | Watch the log                    | `screenextend log`                                          |
@@ -707,6 +715,11 @@ retrying to reach main at ~0.2% CPU, which is harmless. Silence it with
 | `/etc/NetworkManager/conf.d/99-wifi-powersave-off.conf` | laptop  | no (root)                               |
 | `~/.ssh/authorized_keys`                                | both    | no                                      |
 | `~/.scripts/ssCustomName.sh`                            | both    | **YES — the only tracked file changed** |
+
+Every one of these is now tracked in this repo under `config/`, with its
+install path recorded in **`config/MANIFEST`** — except the four files listed as
+deliberately untracked in §21. `./sync.sh` proves the tracked copies still match
+what is running.
 
 Revert that one file alone:
 
@@ -911,12 +924,244 @@ amdgpu:         VRAM: 512M            <- iGPU is NOT eating it
 ```
 
 Main is running on roughly **half** the RAM this document was written against,
-and the 512 MB iGPU carve-out does not account for it. That is a strong reason a
-normal workload hit 98%. Not investigated further here — confirm with:
+and the 512 MB iGPU carve-out does not account for it. That is why a normal
+workload hit 98%.
 
-```bash
-sudo dmidecode -t memory | grep -E 'Locator|Size|Part Number'
+**Resolved 2026-10-22:** not a fault — one DIMM was deliberately removed to deal
+with a separate issue, and is going back in shortly. Until it does, this machine
+swaps hard, which has knock-on effects on the link (see §20). Put `heartbeat`
+back to `5000` once the RAM is in.
+
+---
+
+## 20. 2026-10-22 — locked out, then a link that only looked alive
+
+**Symptom reported:** the laptop could not be reached again.
+
+This time there was a log to read, because §19 pointed the autostart at one.
+Everything below came out of it in about two minutes. It was **two unrelated
+faults stacked on top of each other.**
+
+### Fault 1 — the cursor was pinned, for 3½ hours
+
+```
+[2026-10-21T21:50:43] INFO: cursor locked to current computer
+[2026-10-22T01:18:45] INFO: cursor unlocked from current computer   <- 3h28m later
+[2026-10-22T01:24:57] INFO: cursor locked to current computer       <- and again
 ```
 
-A missing or unseated DIMM would show as one populated slot and one `No Module
-Installed`.
+Between those, ~500 repetitions of:
+
+```
+INFO: cursor is locked to computer, check scroll lock key
+```
+
+That is the cursor being shoved at the edge and refused, once per attempt. A
+pinned cursor is **indistinguishable from a broken link** from the user's side:
+no dialog, no OSD, nothing on screen — the cursor just stops.
+
+**Why it kept happening.** The two bindings were one keypress apart:
+
+| Was                    | Does                      |
+| ---------------------- | ------------------------- |
+| `Ctrl+Alt+L`           | switch right, to the laptop |
+| `Ctrl+Alt+**Shift**+L` | pin the cursor, silently    |
+
+One stray Shift — the hand is already on Shift constantly — turns "go to the
+laptop" into "lock myself out of the laptop". Rebound to **`Ctrl+Alt+Shift+P`**
+(`p` for pin), which is nowhere near the switch keys. Verified: the old
+`Ctrl+Alt+Shift+L` is now inert, and `Ctrl+Alt+Shift+P` locks and unlocks.
+
+**Scroll Lock was tested and is innocent.** 1.27's `[server]` docs say
+`disableLockToComputer` defaults to false, i.e. Scroll Lock toggles the pin — but
+pressing it did nothing here, because the text config *does* define a
+`lockCursorToScreen` action, and that suppresses the Scroll Lock behaviour. So
+the log's own advice ("check scroll lock key") is misleading on this setup. The
+only way in was the hotkey.
+
+### Fault 2 — a link that was ESTABLISHED but had no session
+
+```
+client: [01:22:50.834] NOTE:    server is dead
+client: [01:22:50.836] WARNING: failed to connect to server: server is not responding
+client: [01:22:51.847] IPC:     connecting to '192.168.0.109':24800
+                                 ... and then nothing, ever
+```
+
+Meanwhile the server logged `can't leave computer` 25 times, once per second,
+then gave up with `jump from "ARCH" to "Lenuks" at 960,540`.
+
+The giveaway: **the whole server log contained exactly one
+`accepted client connection`** — the one from the restart hours earlier. The
+client's reconnect was never accepted at the application level, yet:
+
+```
+ESTAB  192.168.0.109:24800  192.168.0.114:47694  users:(("deskflow-core",pid=969942,fd=20))
+```
+
+TCP established, both processes alive, server still responsive to hotkeys (it
+processed a lock/unlock while in this state) — but no Deskflow session. A switch
+request against a screen the server does not consider connected is **refused
+silently, with nothing written to the log at all.** That is the hardest shape of
+this failure to diagnose: every surface check passes.
+
+**What stalled it.** With one DIMM out (§19) this machine swaps hard:
+
+```
+/proc/vmstat:  pswpin 7541935   pswpout 10062754     (~29 GB in, ~38 GB out)
+```
+
+`heartbeat = 5000` means the client declares the server dead after 3×5s. A
+swap-thrashing server stalls past 15 s easily, so the client drops a link that
+was never actually broken — and the reconnect is what wedged. Raised to
+**`heartbeat = 15000`** (45 s). **Put it back to 5000 once the RAM is in.**
+
+### `screenextend status` was lying
+
+It reported `RUNNING / RUNNING` throughout, because it only checked that two
+processes existed. It now asks the client what its last connection event was:
+
+```
+server (Lenuks): RUNNING
+client (ARCH):   RUNNING
+link:            CONNECTED
+```
+
+and on a wedge: `link: NOT CONNECTED (client: connecting to) -- run: screenextend stop && screenextend start`.
+The detection was checked against the real tail of tonight's wedged log, not a
+guess at one.
+
+### Verified after the fix
+
+| Mechanism                  | Result                                              |
+| -------------------------- | --------------------------------------------------- |
+| Mouse at the right edge    | crossed; `switch from "Lenuks" to "ARCH" at 0,500`  |
+| `Ctrl+Alt+L`               | 8/8 from five different pointer positions           |
+| `Ctrl+Alt+H`               | returned to the exact starting pixel                |
+| Clipboard on crossing      | `updated clipboard 0 / 1`                           |
+| `Ctrl+Alt+Shift+P`         | locks and unlocks; old `+L` inert                   |
+
+### Unconfirmed, and left unconfirmed
+
+For about two minutes (01:30:30–01:31:40) `Ctrl+Alt+L` did nothing, twice, with
+**no log line whatsoever** — while `Ctrl+Alt+H` and edge crossing both worked.
+The obvious suspect was the pin toggle leaving `switchInDirection` wedged; that
+was tested directly (lock, unlock, switch) **three times and passed every time**,
+and the hotkey has since worked 11/11. So the cause is unknown. Recorded here
+rather than explained away — same as the stuck-modifier incident in §11.
+
+### Changes
+
+| File                                      | Change                                              |
+| ----------------------------------------- | --------------------------------------------------- |
+| `~/.config/Deskflow/deskflow-server.conf` | pin hotkey `+l` → `+p`; `heartbeat` 5000 → 15000    |
+| `~/.local/bin/screenextend`               | `status` now verifies the session, not the processes |
+| `README.md` §6, §13                       | hotkey change reflected in both places it is documented |
+
+Backups of everything touched sit beside the originals as `*.bak-2026-10-22`,
+and the wedged log is kept at
+`~/.cache/deskflow-server.log.wedged-2026-10-22.bak`.
+
+---
+
+## 21. What this repo tracks, and what it deliberately does not
+
+Up to §20 this repo was documentation only: every config file it described lived
+on one of the two machines and nowhere else. Two consequences showed up
+immediately — the `screenextend` script existed in exactly one place with no
+backup, and §6's config listing had quietly drifted three versions behind the
+file it claimed to document.
+
+So the repo now holds the **what** as well as the **why**.
+
+### Layout
+
+```
+config/
+  MANIFEST                  every file, its install path, and its flags
+  main/
+    xprofile                -> ~/.xprofile
+    Deskflow/               -> ~/.config/Deskflow/
+    local-bin/screenextend  -> ~/.local/bin/screenextend   (SYMLINK, see below)
+    local-bin/clipimg       -> ~/.local/bin/clipimg
+    scripts/                reference copy; the live one is in the dotfiles repo
+  laptop/
+    xprofile, Deskflow/, local-bin/, flameshot/, NetworkManager/
+install.sh                  repo -> machines   (dry run by default)
+sync.sh                     machines -> repo   (dry run by default)
+```
+
+Both scripts default to a dry run and need `--apply`, same convention as
+`REVERT.sh`.
+
+### `screenextend` is a symlink, not a copy
+
+```
+~/.local/bin/screenextend -> <repo>/config/main/local-bin/screenextend
+```
+
+A copy would need remembering to re-copy after every edit, and would be stale
+exactly when it mattered. With a symlink there is one file, tracked, and editing
+it *is* editing the live command. `~/.local/bin` is on `PATH`, which is the only
+reason `screenextend` works as a command from anywhere — nothing was installed.
+
+The trade: **if this repo is moved or deleted, the command breaks** (dangling
+symlink). `./install.sh --apply` recreates it. This is the same arrangement the
+laptop already uses, where `~/.local/bin` is a stow symlink into the dotfiles
+repo (§16, gotcha 7).
+
+### Deliberately untracked
+
+| Path | Why |
+| --- | --- |
+| `~/.config/Deskflow/tls/deskflow.pem` | **Private key.** Cert and key are in the same PEM (§7). Never commit this. |
+| `~/.config/Deskflow/tls/trusted-clients` | Per-install fingerprint; `install.sh` regenerates it. |
+| `~/.config/Deskflow/tls/trusted-servers` | Same, other direction. |
+| `~/.ssh/authorized_keys` | Identity. |
+
+`.gitignore` blocks `*.pem`, `*.key`, `authorized_keys*`, `id_rsa*`,
+`id_ed25519*`, `known_hosts*`, plus `*.log`, `logs/`, `resume` and `*.bak*`.
+
+An `authorized_keys.backup` holding one public key **was** committed and pushed
+to a public repo on 2026-10-21, and was purged from history on 2026-10-22. A
+public key is not a credential and nothing needed rotating, but it had no
+business being here. It now sits at `~/.ssh/authorized_keys.backup-2026-09-04`,
+outside the repo.
+
+**What the tracked files still contain:** LAN IPs (`192.168.0.109`,
+`192.168.0.114`), usernames (`mir`, `mirr`) and hostnames (`Lenuks`, `ARCH`).
+None is secret, all of it is already throughout this README, and RFC1918
+addresses mean nothing outside this LAN. Scrub it if you would rather — but the
+screen names **must** equal the hostnames, so those two cannot simply be
+renamed without editing both Deskflow configs to match.
+
+### Keeping it honest
+
+```bash
+./sync.sh            # does the repo still match both machines?
+./sync.sh --apply    # pull live changes in, then: git diff
+```
+
+`sync.sh` reads the laptop's address out of `screenextend`'s `LAPTOP=` line
+rather than keeping its own copy, so the drift playbook's count of three files
+holding an IP stays three.
+
+One bug worth recording, because it is easy to reintroduce: the manifest loop
+reads on **fd 3**, not stdin. `ssh` consumes stdin, and with `done < MANIFEST`
+it silently swallowed the remaining five laptop entries — the script reported
+success having checked barely half the files. `while read ... <&3; done 3< file`
+is the fix. This is the same family of mistake as gotcha 1 in §16.
+
+### Rebuilding from scratch
+
+```bash
+git clone <this repo> && cd screenExtend
+./install.sh                     # read it
+./install.sh --apply             # packages checked, configs deployed, TLS set up
+screenextend status              # want: link: CONNECTED
+```
+
+§18 is still the conceptual order to follow; `install.sh` just does the
+mechanical parts of it. What it cannot do for you: hostnames (they are the screen
+names), the laptop's SDDM password at boot, ssh keys both ways, and DHCP
+addresses — see the drift playbook.

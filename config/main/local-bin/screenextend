@@ -1,0 +1,63 @@
+#!/bin/sh
+# screenextend - control the Deskflow screen-extend link to laptop "ARCH"
+# Added 2026-09-04.  REVERT: rm ~/.local/bin/screenextend
+LAPTOP="mirr@192.168.0.114"
+LOG="$HOME/.cache/deskflow-server.log"
+
+# The laptop's XAUTHORITY path is randomised at each login, so discover it.
+remote_x_env() {
+    ssh -o BatchMode=yes -o ConnectTimeout=5 "$LAPTOP" \
+      'p=$(pgrep -u mirr -f "i3-with-shmlog|^i3$" | head -1); \
+       xa=$(tr "\0" "\n" < /proc/$p/environ 2>/dev/null | grep ^XAUTHORITY | cut -d= -f2); \
+       echo "DISPLAY=:0 XAUTHORITY=$xa"'
+}
+
+case "$1" in
+  start)
+    pgrep -x deskflow-core >/dev/null 2>&1 \
+      && echo "server: already running" \
+      || { nohup deskflow-core server >"$LOG" 2>&1 & echo "server: started"; }
+    env_str=$(remote_x_env)
+    ssh -o BatchMode=yes "$LAPTOP" \
+      "pgrep -x deskflow-core >/dev/null 2>&1 && echo 'client: already running' || \
+       { export $env_str; setsid nohup deskflow-core client >~/deskflow-client.log 2>&1 </dev/null & sleep 1; echo 'client: started'; }"
+    ;;
+  stop)
+    pkill -x deskflow-core 2>/dev/null && echo "server: stopped" || echo "server: not running"
+    ssh -o BatchMode=yes "$LAPTOP" 'pkill -x deskflow-core 2>/dev/null && echo "client: stopped" || echo "client: not running"'
+    ;;
+  status)
+    echo "server (Lenuks): $(pgrep -x deskflow-core >/dev/null 2>&1 && echo RUNNING || echo stopped)"
+    ssh -o BatchMode=yes -o ConnectTimeout=5 "$LAPTOP" \
+      'echo "client (ARCH):   $(pgrep -x deskflow-core >/dev/null 2>&1 && echo RUNNING || echo stopped)"' \
+      2>/dev/null || echo "client (ARCH):   unreachable"
+    # Both processes can be RUNNING while the link is dead: if the server stalls
+    # past the heartbeat the client drops, reconnects, and the server may never
+    # accept the new connection -- TCP shows ESTABLISHED but no session exists.
+    # So ask the client what its last connection event actually was.
+    last=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$LAPTOP" \
+      'grep -hoE "connected to server|connecting to|server is dead|failed to connect" \
+         ~/deskflow-client.log 2>/dev/null | tail -1' 2>/dev/null)
+    case "$last" in
+      "connected to server") echo "link:            CONNECTED" ;;
+      "")                    echo "link:            unknown (no client log yet)" ;;
+      *)                     echo "link:            NOT CONNECTED (client: $last) -- run: screenextend stop && screenextend start" ;;
+    esac
+    echo "--- last link events ---"
+    grep -E "accepted client connection|connected|disconnected|switch from" "$LOG" 2>/dev/null | tail -5
+    ;;
+  unstick)
+    # Release every modifier on BOTH machines. Use when a screen gets stuck
+    # behaving as if Ctrl/Alt/Shift is held down -- a known failure mode of
+    # X11 keyboard sharing when a modifier is held across a screen switch.
+    MODS="Control_L Control_R Alt_L Alt_R Shift_L Shift_R Super_L Super_R Meta_L Meta_R ISO_Level3_Shift Caps_Lock"
+    for k in $MODS; do xdotool keyup "$k" 2>/dev/null; done
+    echo "main (Lenuks): modifiers released"
+    env_str=$(remote_x_env)
+    ssh -o BatchMode=yes "$LAPTOP" "export $env_str; \
+      for k in $MODS; do xdotool keyup \$k 2>/dev/null; done; \
+      echo 'laptop (ARCH):  modifiers released'"
+    ;;
+  log) tail -f "$LOG" ;;
+  *) echo "usage: screenextend {start|stop|status|unstick|log}" ; exit 1 ;;
+esac
