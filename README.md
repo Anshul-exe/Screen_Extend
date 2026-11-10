@@ -575,6 +575,17 @@ in practice and **could not be reproduced afterwards**, including by simulating
 realistic hold-across-switch timing. The cause is therefore unconfirmed and
 `unstick` treats the symptom, not the cause.
 
+`unstick` releases by **keycode**, walking every keycode in the modifier map
+(`xmodmap -pm`), not by keysym name. One keysym can sit on several keycodes —
+on the laptop `Alt_L` is both 64 and 204 — and `xdotool keyup Alt_L` releases
+only the first. On 2026-11-10 Alt stuck on the laptop as keycode **204** on the
+`Virtual core XTEST keyboard` (the device Deskflow injects through), and the old
+keysym loop left it held. To see what is actually down on the laptop:
+
+```sh
+xinput query-state 'Virtual core XTEST keyboard' | grep =down
+```
+
 ---
 
 ## 12. Extras

@@ -65,12 +65,17 @@ case "$1" in
     # Release every modifier on BOTH machines. Use when a screen gets stuck
     # behaving as if Ctrl/Alt/Shift is held down -- a known failure mode of
     # X11 keyboard sharing when a modifier is held across a screen switch.
-    MODS="Control_L Control_R Alt_L Alt_R Shift_L Shift_R Super_L Super_R Meta_L Meta_R ISO_Level3_Shift Caps_Lock"
-    for k in $MODS; do xdotool keyup "$k" 2>/dev/null; done
+    #
+    # Release by KEYCODE, not keysym: one keysym can live on several keycodes
+    # (Alt_L is both 64 and 204 here). "xdotool keyup Alt_L" only releases 64,
+    # so a stuck 204 -- seen 2026-11-10 on the laptop's XTEST keyboard, which is
+    # what Deskflow types through -- survived the old keysym-based loop.
+    # So walk every keycode in the modifier map (`xmodmap -pm`, incl. Lock).
+    REL='for h in $(xmodmap -pm | grep -oE "0x[0-9a-f]+"); do xdotool keyup $(printf %d $h) 2>/dev/null; done'
+    eval "$REL"
     echo "main (Lenuks): modifiers released"
     env_str=$(remote_x_env)
-    ssh -o BatchMode=yes "$LAPTOP" "export $env_str; \
-      for k in $MODS; do xdotool keyup \$k 2>/dev/null; done; \
+    ssh -o BatchMode=yes "$LAPTOP" "export $env_str; $REL; \
       echo 'laptop (ARCH):  modifiers released'"
     ;;
   log) tail -f "$LOG" ;;
