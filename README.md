@@ -35,7 +35,7 @@ This is deliberately **not** an extended display, and the difference matters:
 | Display | eDP-1, 1920×1080              | eDP-1, 1920×1080           |
 | Desktop | i3 4.25.1 on **X11**, SDDM    | i3 4.25.1 on **X11**, SDDM |
 | User    | `mir`                         | `mirr`                     |
-| IP      | 192.168.0.109 (DHCP, drifts)  | 192.168.0.114 (DHCP)       |
+| IP      | 192.168.0.109 (DHCP, drifts)  | 192.168.0.117 (DHCP)       |
 
 Both being **X11** is the single most important fact in this whole setup — it
 determined which tools were even possible.
@@ -560,6 +560,12 @@ remote_x_env() {
 
 Without this, anything scripted against the laptop's display breaks on the next
 login.
+
+`start` does the same thing **locally** (`local_x_env`): it takes `DISPLAY` and
+`XAUTHORITY` from main's own i3 rather than trusting the calling shell, which may
+be a tmux pane still holding a previous login's cookie. It also checks the server
+is still alive a second after launch, instead of printing `server: started`
+unconditionally. See §22.
 
 `unstick` releases every modifier (Ctrl, Alt, Shift, Super, Meta, AltGr,
 CapsLock) on **both** machines — the remedy for a screen that starts behaving as
@@ -1165,3 +1171,50 @@ screenextend status              # want: link: CONNECTED
 mechanical parts of it. What it cannot do for you: hostnames (they are the screen
 names), the laptop's SDDM password at boot, ssh keys both ways, and DHCP
 addresses — see the drift playbook.
+
+---
+
+## 22. 2026-11-10 — two faults behind one `screenextend start`
+
+```
+server: started
+ssh: connect to host 192.168.0.114 port 22: No route to host
+... Aborted (core dumped) nohup deskflow-core server > "$LOG" 2>&1
+```
+
+### Fault 1 — the laptop's IP drifted, `.114` → `.117`
+
+Fourth time. The laptop was still reachable over Tailscale (`arch`,
+`100.74.253.39`), which is how its new LAN address was found. Before trusting
+`.117`, its ed25519 host key was compared against the `known_hosts` entry for
+`.114` — identical — and only then added. `LAPTOP=` updated in `screenextend` and
+`REVERT.sh`. Main stayed at `.109`, so the laptop's two files were untouched.
+
+Tailscale is a usable fallback for the *control* path when the LAN address is
+unknown: `ssh -o HostKeyAlias=<old LAN IP> mirr@100.74.253.39` reuses the existing
+host key without editing `known_hosts`. Deskflow itself still connects over the
+LAN.
+
+### Fault 2 — the server aborted on a stale X cookie
+
+```
+Invalid MIT-MAGIC-COOKIE-1 key
+qt.qpa.xcb: could not connect to display :0
+qt.qpa.plugin: From 6.5.0, xcb-cursor0 or libxcb-cursor0 is needed ...
+```
+
+The calling shell's `XAUTHORITY` belonged to an earlier login (an old tmux
+pane). The `xcb-cursor0` line is a **red herring** — Qt prints it whenever the
+xcb plugin fails for any reason; `xcb-util-cursor` is installed. Worse, the
+script still said `server: started`, because it reported success the moment it
+backgrounded the process.
+
+Fix in `screenextend start`: take `DISPLAY`/`XAUTHORITY` from the running i3
+(`local_x_env`, the local twin of `remote_x_env`), and confirm the process is
+alive after a second — otherwise print `FAILED` with the log tail and exit 1.
+
+### Verified
+
+`XAUTHORITY=/tmp/nonexistent-stale screenextend start` → server started; the
+laptop's already-running client reconnected within seconds; `screenextend status`
+→ `link: CONNECTED`.

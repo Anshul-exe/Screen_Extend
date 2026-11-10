@@ -1,7 +1,7 @@
 #!/bin/sh
 # screenextend - control the Deskflow screen-extend link to laptop "ARCH"
 # Added 2026-09-04.  REVERT: rm ~/.local/bin/screenextend
-LAPTOP="mirr@192.168.0.114"
+LAPTOP="mirr@192.168.0.117"
 LOG="$HOME/.cache/deskflow-server.log"
 
 # The laptop's XAUTHORITY path is randomised at each login, so discover it.
@@ -12,11 +12,26 @@ remote_x_env() {
        echo "DISPLAY=:0 XAUTHORITY=$xa"'
 }
 
+# Same problem locally: a shell (e.g. an old tmux pane) can carry a stale
+# XAUTHORITY from a previous login, and deskflow-core then aborts with
+# "Invalid MIT-MAGIC-COOKIE-1 key". Take the X env from the running i3 instead.
+local_x_env() {
+    p=$(pgrep -u "$(id -u)" -x i3 | head -1)
+    [ -n "$p" ] || return
+    tr '\0' '\n' < /proc/$p/environ 2>/dev/null | grep -E '^(DISPLAY|XAUTHORITY)='
+}
+
 case "$1" in
   start)
-    pgrep -x deskflow-core >/dev/null 2>&1 \
-      && echo "server: already running" \
-      || { nohup deskflow-core server >"$LOG" 2>&1 & echo "server: started"; }
+    if pgrep -x deskflow-core >/dev/null 2>&1; then
+      echo "server: already running"
+    else
+      for kv in $(local_x_env); do export "$kv"; done
+      nohup deskflow-core server >"$LOG" 2>&1 &
+      sleep 1
+      if kill -0 $! 2>/dev/null; then echo "server: started"
+      else echo "server: FAILED to start -- see $LOG"; tail -3 "$LOG"; exit 1; fi
+    fi
     env_str=$(remote_x_env)
     ssh -o BatchMode=yes "$LAPTOP" \
       "pgrep -x deskflow-core >/dev/null 2>&1 && echo 'client: already running' || \

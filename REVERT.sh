@@ -5,7 +5,7 @@
 #   ./REVERT.sh          show what would be removed (dry run)
 #   ./REVERT.sh --apply  actually remove it
 # ============================================================================
-LAPTOP="mirr@192.168.0.114"
+LAPTOP="mirr@192.168.0.117"
 APPLY=0; [ "$1" = "--apply" ] && APPLY=1
 run() { if [ $APPLY -eq 1 ]; then eval "$1"; else echo "  would run: $1"; fi; }
 rrun() { if [ $APPLY -eq 1 ]; then ssh -o BatchMode=yes $LAPTOP "$1"; else echo "  would run (laptop): $1"; fi; }
